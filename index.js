@@ -4,6 +4,7 @@ import config from './config/config.js';
 import * as swagger from '@fastify/swagger';
 import * as swaggerUI from '@fastify/swagger-ui';
 import postgres from '@fastify/postgres';
+import cors from '@fastify/cors';
 import Joi from 'joi';
 
 const envSchema = Joi.object({
@@ -27,6 +28,12 @@ if (error) {
 const app = fastify({ logger: true });
 
 const start = async () => {
+  // CORS
+  await app.register(cors, {
+    origin: true, // TODO en prod especificar dominios.
+    credentials: true
+  });
+
   // SWAGGER
   await app.register(swagger, {
     openapi: {
