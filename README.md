@@ -64,18 +64,33 @@ PostgreSQL 16 en Docker:
 ### Modelos
 
 **Users:**
-- id (SERIAL PRIMARY KEY)
+- id (UUID PRIMARY KEY)
 - nombre (VARCHAR)
 - email (VARCHAR UNIQUE)
 - saldo (DECIMAL)
+- created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
 
 **Transactions:**
-- id (SERIAL PRIMARY KEY)
-- origen (INTEGER, FK a users)
-- destino (INTEGER, FK a users)
+- id (UUID PRIMARY KEY)
+- origen (UUID, FK a users)
+- destino (UUID, FK a users)
 - monto (DECIMAL)
 - estado (pendiente, confirmada, rechazada)
 - fecha (TIMESTAMP)
+- created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+
+**Audit Log:**
+- id (UUID PRIMARY KEY)
+- user_id (UUID, FK a users)
+- transaction_id (UUID, FK a transactions, nullable)
+- operation_type (VARCHAR)
+- amount (DECIMAL, nullable)
+- previous_balance (DECIMAL, nullable)
+- new_balance (DECIMAL, nullable)
+- description (TEXT, nullable)
+- created_at (TIMESTAMP)
 
 ## Reglas de negocio
 
