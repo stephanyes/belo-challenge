@@ -1,0 +1,24 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16
+    container_name: belo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: belo_db
+      POSTGRES_USER: belo_user
+      POSTGRES_PASSWORD: belo_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - belo-network
+
+volumes:
+  postgres_data:
+
+networks:
+  belo-network:
+    driver: bridge
