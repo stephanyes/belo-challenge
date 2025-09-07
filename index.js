@@ -65,8 +65,8 @@ const start = async () => {
 
   try {
     await app.listen({ port: config.server.port, host: '0.0.0.0' });
-    console.log(`Server running on port ${config.server.port}`);
-    console.log(`API docs: http://localhost:${config.server.port}/docs`);
+    app.log.info(`Server running on port ${config.server.port}`);
+    app.log.info(`API docs: http://localhost:${config.server.port}/docs`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
