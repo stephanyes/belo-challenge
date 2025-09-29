@@ -1,21 +1,28 @@
+import { FastifyInstance } from 'fastify';
+
 describe('Transactions Integration Tests', () => {
-  let fastify;
-  let mockClient;
+  let fastify: FastifyInstance;
+  let mockClient: any;
+  let mockQuery: jest.Mock;
+  let mockConnect: jest.Mock;
   
   beforeAll(async () => {
+    mockQuery = jest.fn();
+    mockConnect = jest.fn();
+    
     fastify = {
       pg: {
-        query: jest.fn(),
-        connect: jest.fn()
+        query: mockQuery,
+        connect: mockConnect
       }
-    };
+    } as any;
     
     mockClient = {
       query: jest.fn(),
       release: jest.fn()
     };
     
-    fastify.pg.connect.mockResolvedValue(mockClient);
+    mockConnect.mockResolvedValue(mockClient);
   });
   
   beforeEach(() => {
@@ -37,12 +44,12 @@ describe('Transactions Integration Tests', () => {
         }
       ];
       
-      fastify.pg.query.mockResolvedValue({ rows: mockTransactions });
+      mockQuery.mockResolvedValue({ rows: mockTransactions });
       
       const result = await getTransactions(fastify, {});
       
       expect(result.transactions).toEqual(mockTransactions);
-      expect(fastify.pg.query).toHaveBeenCalledWith(
+      expect(mockQuery).toHaveBeenCalledWith(
         'SELECT * FROM transactions ORDER BY fecha DESC',
         []
       );
@@ -61,12 +68,12 @@ describe('Transactions Integration Tests', () => {
         }
       ];
       
-      fastify.pg.query.mockResolvedValue({ rows: mockTransactions });
+      mockQuery.mockResolvedValue({ rows: mockTransactions });
       
       const result = await getTransactions(fastify, { userId });
       
       expect(result.transactions).toEqual(mockTransactions);
-      expect(fastify.pg.query).toHaveBeenCalledWith(
+      expect(mockQuery).toHaveBeenCalledWith(
         'SELECT * FROM transactions WHERE origen = $1 OR destino = $1 ORDER BY fecha DESC',
         [userId]
       );
@@ -74,7 +81,7 @@ describe('Transactions Integration Tests', () => {
     
     it('should handle database errors', async () => {
       const error = new Error('Database connection failed');
-      fastify.pg.query.mockRejectedValue(error);
+      mockQuery.mockRejectedValue(error);
       
       const result = await getTransactions(fastify, {});
       
@@ -292,7 +299,7 @@ describe('Transactions Integration Tests', () => {
         estado: 'pendiente'
       };
       
-      fastify.pg.query
+      mockQuery
         .mockResolvedValueOnce({ rows: [mockTransaction] }) // Get transaction
         .mockResolvedValueOnce({ rows: [{ ...mockTransaction, estado: 'rechazada' }] }) // Update transaction
         .mockResolvedValueOnce({ rows: [] }); // Audit log
@@ -306,7 +313,7 @@ describe('Transactions Integration Tests', () => {
     it('should handle transaction not found error', async () => {
       const transactionId = '123e4567-e89b-12d3-a456-426614174002';
       
-      fastify.pg.query.mockResolvedValueOnce({ rows: [] }); // Get transaction (not found)
+      mockQuery.mockResolvedValue({ rows: [] }); // Get transaction (not found)
       
       const result = await rejectTransaction(fastify, transactionId);
       
@@ -320,7 +327,7 @@ describe('Transactions Integration Tests', () => {
         estado: 'confirmada'
       };
       
-      fastify.pg.query.mockResolvedValueOnce({ rows: [mockTransaction] }); // Get transaction
+      mockQuery.mockResolvedValue({ rows: [mockTransaction] }); // Get transaction
       
       const result = await rejectTransaction(fastify, transactionId);
       
@@ -329,12 +336,12 @@ describe('Transactions Integration Tests', () => {
   });
 });
 
-async function getTransactions(fastify, query) {
+async function getTransactions(fastify: FastifyInstance, query: any) {
   try {
     const { userId } = query;
     
     let queryStr = 'SELECT * FROM transactions';
-    let params = [];
+    let params: any[] = [];
     
     if (userId) {
       queryStr += ' WHERE origen = $1 OR destino = $1';
@@ -346,11 +353,11 @@ async function getTransactions(fastify, query) {
     const result = await fastify.pg.query(queryStr, params);
     return { transactions: result.rows };
   } catch (error) {
-    return { error: 'Failed to fetch transactions', details: error.message };
+    return { error: 'Failed to fetch transactions', details: (error as Error).message };
   }
 }
 
-async function createTransaction(fastify, transactionData) {
+async function createTransaction(fastify: FastifyInstance, transactionData: any) {
   const client = await fastify.pg.connect();
   
   try {
@@ -421,13 +428,13 @@ async function createTransaction(fastify, transactionData) {
     
   } catch (error) {
     await client.query('ROLLBACK');
-    return { error: 'Failed to create transaction', details: error.message };
+    return { error: 'Failed to create transaction', details: (error as Error).message };
   } finally {
     client.release();
   }
 }
 
-async function approveTransaction(fastify, transactionId) {
+async function approveTransaction(fastify: FastifyInstance, transactionId: string) {
   const client = await fastify.pg.connect();
   
   try {
@@ -502,13 +509,13 @@ async function approveTransaction(fastify, transactionId) {
     
   } catch (error) {
     await client.query('ROLLBACK');
-    return { error: 'Failed to approve transaction', details: error.message };
+    return { error: 'Failed to approve transaction', details: (error as Error).message };
   } finally {
     client.release();
   }
 }
 
-async function rejectTransaction(fastify, transactionId) {
+async function rejectTransaction(fastify: FastifyInstance, transactionId: string) {
   try {
     const transactionResult = await fastify.pg.query(
       'SELECT * FROM transactions WHERE id = $1',
@@ -541,6 +548,6 @@ async function rejectTransaction(fastify, transactionId) {
     };
     
   } catch (error) {
-    return { error: 'Failed to reject transaction', details: error.message };
+    return { error: 'Failed to reject transaction', details: (error as Error).message };
   }
 }

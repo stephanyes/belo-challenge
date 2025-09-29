@@ -1,7 +1,7 @@
-const { logAudit } = require('../../utils/audit.js');
+import { logAudit } from '../../src/utils/audit';
 
 describe('Audit Utils', () => {
-  let mockClient;
+  let mockClient: any;
   
   beforeEach(() => {
     mockClient = {

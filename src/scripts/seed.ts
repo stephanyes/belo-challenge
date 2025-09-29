@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { Pool } from 'pg';
-import config from '../config.js';
+import bcrypt from 'bcrypt';
+import config from '../config/config';
 
 const pool = new Pool(config.database);
 
@@ -15,19 +16,22 @@ const seedData = async () => {
     await client.query('DELETE FROM users');
     
     const users = [
-      { nombre: 'Juan Pérez', email: 'juan@example.com', saldo: 100000.00 },
-      { nombre: 'María García', email: 'maria@example.com', saldo: 500000.00 },
-      { nombre: 'Carlos López', email: 'carlos@example.com', saldo: 60000.00 },
-      { nombre: 'Ana Martínez', email: 'ana@example.com', saldo: 30000.00 },
-      { nombre: 'Pedro Rodríguez', email: 'pedro@example.com', saldo: 0.00 },
-      { nombre: 'Laura Sánchez', email: 'laura@example.com', saldo: 0.00 }
+      { nombre: 'Juan Pérez', email: 'juan@example.com', password: 'password123', saldo: 100000.00 },
+      { nombre: 'María García', email: 'maria@example.com', password: 'password123', saldo: 500000.00 },
+      { nombre: 'Carlos López', email: 'carlos@example.com', password: 'password123', saldo: 60000.00 },
+      { nombre: 'Ana Martínez', email: 'ana@example.com', password: 'password123', saldo: 30000.00 },
+      { nombre: 'Pedro Rodríguez', email: 'pedro@example.com', password: 'password123', saldo: 0.00 },
+      { nombre: 'Laura Sánchez', email: 'laura@example.com', password: 'password123', saldo: 0.00 }
     ];
     
-    const userIds = [];
+    const userIds: string[] = [];
     for (const user of users) {
+      // Hashear la contraseña
+      const hashedPassword = await bcrypt.hash(user.password, 10);
+      
       const result = await client.query(
-        'INSERT INTO users (nombre, email, saldo) VALUES ($1, $2, $3) RETURNING id',
-        [user.nombre, user.email, user.saldo]
+        'INSERT INTO users (nombre, email, password, saldo) VALUES ($1, $2, $3, $4) RETURNING id',
+        [user.nombre, user.email, hashedPassword, user.saldo]
       );
       userIds.push(result.rows[0].id);
     }

@@ -1,12 +1,16 @@
+import { FastifyInstance } from 'fastify';
+
 describe('General Routes Integration Tests', () => {
-  let fastify;
+  let fastify: FastifyInstance;
+  let mockQuery: jest.Mock;
   
   beforeAll(async () => {
+    mockQuery = jest.fn();
     fastify = {
       pg: {
-        query: jest.fn()
+        query: mockQuery
       }
-    };
+    } as any;
   });
   
   beforeEach(() => {
@@ -25,7 +29,7 @@ describe('General Routes Integration Tests', () => {
   
   describe('GET /health', () => {
     it('should return health status when database is connected', async () => {
-      fastify.pg.query.mockResolvedValue({ rows: [{ count: '1' }] });
+      mockQuery.mockResolvedValue({ rows: [{ count: '1' }] });
       
       const result = await getHealth(fastify);
       
@@ -36,7 +40,7 @@ describe('General Routes Integration Tests', () => {
     
     it('should return health status when database is disconnected', async () => {
       const error = new Error('Database connection failed');
-      fastify.pg.query.mockRejectedValue(error);
+      mockQuery.mockRejectedValue(error);
       
       const result = await getHealth(fastify);
       
@@ -56,7 +60,7 @@ async function getRoot() {
   };
 }
 
-async function getHealth(fastify) {
+async function getHealth(fastify: FastifyInstance) {
   try {
     await fastify.pg.query('SELECT 1 as count');
     
@@ -69,7 +73,7 @@ async function getHealth(fastify) {
     return {
       status: 'unhealthy',
       database: 'disconnected',
-      error: error.message,
+      error: (error as Error).message,
       timestamp: new Date().toISOString()
     };
   }

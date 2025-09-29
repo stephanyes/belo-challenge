@@ -1,12 +1,16 @@
+import { FastifyInstance } from 'fastify';
+
 describe('Users Integration Tests', () => {
-  let fastify;
+  let fastify: FastifyInstance;
+  let mockQuery: jest.Mock;
   
   beforeAll(async () => {
+    mockQuery = jest.fn();
     fastify = {
       pg: {
-        query: jest.fn()
+        query: mockQuery
       }
-    };
+    } as any;
   });
   
   beforeEach(() => {
@@ -34,17 +38,17 @@ describe('Users Integration Tests', () => {
         }
       ];
       
-      fastify.pg.query.mockResolvedValue({ rows: mockUsers });
+      mockQuery.mockResolvedValue({ rows: mockUsers });
       
       const result = await getUsers(fastify);
       
       expect(result.users).toEqual(mockUsers);
-      expect(fastify.pg.query).toHaveBeenCalledWith('SELECT * FROM users ORDER BY created_at DESC');
+      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM users ORDER BY created_at DESC');
     });
     
     it('should handle database errors', async () => {
       const error = new Error('Database connection failed');
-      fastify.pg.query.mockRejectedValue(error);
+      mockQuery.mockRejectedValue(error);
       
       const result = await getUsers(fastify);
       
@@ -53,7 +57,7 @@ describe('Users Integration Tests', () => {
     });
     
     it('should return empty array when no users exist', async () => {
-      fastify.pg.query.mockResolvedValue({ rows: [] });
+      mockQuery.mockResolvedValue({ rows: [] });
       
       const result = await getUsers(fastify);
       
@@ -62,11 +66,11 @@ describe('Users Integration Tests', () => {
   });
 });
 
-async function getUsers(fastify) {
+async function getUsers(fastify: FastifyInstance) {
   try {
     const result = await fastify.pg.query('SELECT * FROM users ORDER BY created_at DESC');
     return { users: result.rows };
   } catch (error) {
-    return { error: 'Failed to fetch users', details: error.message };
+    return { error: 'Failed to fetch users', details: (error as Error).message };
   }
 }

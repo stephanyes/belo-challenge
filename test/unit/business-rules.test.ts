@@ -1,5 +1,5 @@
 describe('Business Rules', () => {
-  let mockClient;
+  let mockClient: any;
   
   beforeEach(() => {
     mockClient = {
@@ -171,32 +171,32 @@ describe('Business Rules', () => {
   });
 });
 
-function determineTransactionState(amount) {
+function determineTransactionState(amount: number): string {
   return amount > 50000 ? 'pendiente' : 'confirmada';
 }
 
-function checkSufficientBalance(client, userId, amount) {
+function checkSufficientBalance(client: any, userId: string, amount: number): Promise<boolean> {
   return client.query('SELECT saldo FROM users WHERE id = $1', [userId])
-    .then(result => {
+    .then((result: any) => {
       const balance = parseFloat(result.rows[0].saldo);
       return balance >= amount;
     });
 }
 
-function validateUsersExist(client, userIds) {
+function validateUsersExist(client: any, userIds: string[]): Promise<boolean> {
   return client.query('SELECT id FROM users WHERE id IN ($1, $2)', userIds)
-    .then(result => result.rows.length === 2);
+    .then((result: any) => result.rows.length === 2);
 }
 
-function canApproveTransaction(transaction) {
+function canApproveTransaction(transaction: any): boolean {
   return transaction.estado === 'pendiente';
 }
 
-function canRejectTransaction(transaction) {
+function canRejectTransaction(transaction: any): boolean {
   return transaction.estado === 'pendiente';
 }
 
-async function executeAtomicTransaction(client, operation) {
+async function executeAtomicTransaction(client: any, operation: () => Promise<any>): Promise<any> {
   await client.query('BEGIN');
   try {
     const result = await operation();

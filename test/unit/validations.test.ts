@@ -103,24 +103,24 @@ describe('Validations', () => {
   });
 });
 
-function isValidUUID(uuid) {
+function isValidUUID(uuid: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(uuid);
 }
 
-function isValidAmount(amount) {
+function isValidAmount(amount: number): boolean {
   return typeof amount === 'number' && amount > 0;
 }
 
-function isValidTransactionState(state) {
+function isValidTransactionState(state: string): boolean {
   const validStates = ['pendiente', 'confirmada', 'rechazada'];
   return validStates.includes(state);
 }
 
-function hasRequiredTransactionFields(transaction) {
+function hasRequiredTransactionFields(transaction: any): boolean {
   return !!(transaction.origen && transaction.destino && transaction.monto);
 }
 
-function isValidTransaction(transaction) {
+function isValidTransaction(transaction: any): boolean {
   return transaction.origen !== transaction.destino;
 }

@@ -1,5 +1,5 @@
 describe('Transaction Logic', () => {
-  let mockClient;
+  let mockClient: any;
   
   beforeEach(() => {
     mockClient = {
@@ -240,7 +240,7 @@ describe('Transaction Logic', () => {
   });
 });
 
-async function createTransaction(client, transactionData) {
+async function createTransaction(client: any, transactionData: any) {
   await client.query('BEGIN');
   
   try {
@@ -253,7 +253,7 @@ async function createTransaction(client, transactionData) {
       throw new Error('Origin or destination user not found');
     }
     
-    const originUser = usersResult.rows.find(u => u.id === transactionData.origen);
+    const originUser = usersResult.rows.find((u: any) => u.id === transactionData.origen);
     if (originUser.saldo < transactionData.monto) {
       throw new Error('Insufficient funds');
     }
@@ -273,7 +273,7 @@ async function createTransaction(client, transactionData) {
     );
     
     if (estado === 'confirmada') {
-      const destUser = usersResult.rows.find(u => u.id === transactionData.destino);
+      const destUser = usersResult.rows.find((u: any) => u.id === transactionData.destino);
       
       await client.query(
         'UPDATE users SET saldo = saldo - $1 WHERE id = $2',
@@ -305,7 +305,7 @@ async function createTransaction(client, transactionData) {
   }
 }
 
-async function approveTransaction(client, transactionId) {
+async function approveTransaction(client: any, transactionId: string) {
   await client.query('BEGIN');
   
   try {
@@ -375,7 +375,7 @@ async function approveTransaction(client, transactionId) {
   }
 }
 
-async function rejectTransaction(client, transactionId) {
+async function rejectTransaction(client: any, transactionId: string) {
   const transactionResult = await client.query(
     'SELECT * FROM transactions WHERE id = $1',
     [transactionId]

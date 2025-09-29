@@ -2,3 +2,12 @@
 node_modules/
 testing.test.ts
 coverage/
+
+*.d.ts
+*.d.ts.map
+*.js.map
+test/**/*.js
+!test/**/*.ts
+
+/dist
+add-password-column.sql

@@ -1,37 +1,63 @@
-import { logAudit } from '../utils/audit.js';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { logAudit } from '../utils/audit';
+import { Transaction, User, CreateTransactionRequest, TransactionResponse, ErrorResponse } from '../types';
+import { authMiddleware } from '../middleware/auth';
+import { validatePaginationParams, calculatePagination, PaginationResult } from '../utils/pagination';
+import { BadRequestError, NotFoundError, InternalServerError } from '../errors/AppError';
 
-export default async function transactionRoutes(fastify, options) {
+interface TransactionQuery {
+  userId?: string;
+}
+
+export default async function transactionRoutes(fastify: FastifyInstance) {
+  const authDisabled = String(process.env.AUTH_FLAG).toLowerCase() === 'false';
+  if (!authDisabled) {
+    fastify.addHook('preHandler', authMiddleware);
+  }
   fastify.get('/transactions', {
+    config: {
+      rateLimit: {
+        max: 120,
+        timeWindow: '5 minutes'
+      }
+    },
     schema: {
+      security: [{ BearerAuth: [] }],
       description: 'Obtiene transacciones filtradas por userId o todas las transacciones',
       querystring: {
         type: 'object',
         properties: {
-          userId: { type: 'string', format: 'uuid' }
+          userId: {
+            type: 'string',
+            format: 'uuid'
+          },
+          limit: {
+            type: 'number',
+            minimum: 1,
+            maximum: 100,
+            default: 50
+          },
+          offset: {
+            type: 'number',
+            minimum: 0,
+            default: 0
+          },
+          startDate: {
+            type: 'string',
+            format: 'date-time'
+          },
+          endDate: {
+            type: 'string',
+            format: 'date-time'
+          },
+          status: {
+            type: 'string',
+            enum: ['pendiente', 'confirmada', 'rechazada']
+          }
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            transactions: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string', format: 'uuid' },
-                  origen: { type: 'string', format: 'uuid' },
-                  destino: { type: 'string', format: 'uuid' },
-                  monto: { type: 'number' },
-                  estado: { type: 'string' },
-                  fecha: { type: 'string' },
-                  created_at: { type: 'string' },
-                  updated_at: { type: 'string' }
-                }
-              }
-            }
-          }
-        },
+        200: { $ref: 'TransactionsListResponse' },
         500: {
           type: 'object',
           properties: {
@@ -41,37 +67,71 @@ export default async function transactionRoutes(fastify, options) {
         }
       }
     }
-  }, async (request, reply) => {
+  }, async (request: FastifyRequest<{ Querystring: { userId?: string; limit?: number; offset?: number; status?: string } }>, reply: FastifyReply) => {
     try {
-      const { userId } = request.query;
+      const { userId, limit, offset, status } = request.query;
+      const { limit: validatedLimit, offset: validatedOffset } = validatePaginationParams(limit, offset);
       
       let query = 'SELECT * FROM transactions';
-      let params = [];
+      let countQuery = 'SELECT COUNT(*) FROM transactions';
+      const params: any[] = [];
+      const whereConditions: string[] = [];
       
       if (userId) {
-        query += ' WHERE origen = $1 OR destino = $1';
-        params = [userId];
+        whereConditions.push('(origen = $' + (params.length + 1) + ' OR destino = $' + (params.length + 1) + ')');
+        params.push(userId);
       }
       
-      query += ' ORDER BY fecha DESC';
+      if (status) {
+        whereConditions.push('estado = $' + (params.length + 1));
+        params.push(status);
+      }
       
-      const result = await fastify.pg.query(query, params);
-      return { transactions: result.rows };
+      if (whereConditions.length > 0) {
+        const whereClause = ' WHERE ' + whereConditions.join(' AND ');
+        query += whereClause;
+        countQuery += whereClause;
+      }
+      
+      query += ' ORDER BY fecha DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+      params.push(validatedLimit, validatedOffset);
+      
+      const [transactionsResult, countResult] = await Promise.all([
+        fastify.pg.query(query, params),
+        fastify.pg.query(countQuery, params.slice(0, -2)) // Excluir limit y offset del count
+      ]);
+      
+      const total = parseInt(countResult.rows[0].count);
+      const pagination = calculatePagination(total, validatedLimit, validatedOffset);
+      
+      return {
+        data: transactionsResult.rows as Transaction[],
+        pagination
+      };
     } catch (error) {
-      reply.code(500);
-      return { error: 'Failed to fetch transactions', details: error.message };
+      throw new InternalServerError('Failed to fetch transactions');
     }
   });
 
   fastify.patch('/transactions/:id/approve', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '5 minutes'
+      }
+    },
     schema: {
+      security: [{ BearerAuth: [] }],
       description: 'Confirma una transaccion pendiente y realiza el movimiento de fondos',
       params: {
         type: 'object',
+        required: ['id'],
         properties: {
-          id: { type: 'string', format: 'uuid' }
-        },
-        required: ['id']
+          id: {
+            type: 'string',
+            format: 'uuid'
+          }
+        }
       },
       response: {
         200: {
@@ -91,28 +151,14 @@ export default async function transactionRoutes(fastify, options) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
-          }
-        },
-        404: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
-          }
-        },
-        500: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-            details: { type: 'string' }
-          }
-        }
+        400: { $ref: 'ErrorResponse' },
+        401: { $ref: 'ErrorResponse' },
+        429: { $ref: 'ErrorResponse' },
+        404: { $ref: 'ErrorResponse' },
+        500: { $ref: 'ErrorResponse' }
       }
     }
-  }, async (request, reply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const client = await fastify.pg.connect();
     
     try {
@@ -128,16 +174,14 @@ export default async function transactionRoutes(fastify, options) {
       
       if (transactionResult.rows.length === 0) {
         await client.query('ROLLBACK');
-        reply.code(404);
-        return { error: 'Transaction not found' };
+        throw new NotFoundError('Transaction not found');
       }
       
       const transaction = transactionResult.rows[0];
       
       if (transaction.estado !== 'pendiente') {
         await client.query('ROLLBACK');
-        reply.code(400);
-        return { error: 'Transaction is not pending' };
+        throw new BadRequestError('Transaction is not pending');
       }
       
       // Verificamos que el user origen tiene suficiente plata con LOCK
@@ -148,16 +192,14 @@ export default async function transactionRoutes(fastify, options) {
       
       if (originUserResult.rows.length === 0) {
         await client.query('ROLLBACK');
-        reply.code(400);
-        return { error: 'Origin user not found' };
+        throw new BadRequestError('Origin user not found');
       }
       
       const originSaldo = parseFloat(originUserResult.rows[0].saldo);
       
       if (originSaldo < transaction.monto) {
         await client.query('ROLLBACK');
-        reply.code(400);
-        return { error: 'Insufficient funds' };
+        throw new BadRequestError('Insufficient funds');
       }
       
       // Obtener saldo destino para auditoría
@@ -213,22 +255,31 @@ export default async function transactionRoutes(fastify, options) {
       
     } catch (error) {
       await client.query('ROLLBACK');
-      reply.code(500);
-      return { error: 'Failed to approve transaction', details: error.message };
+      throw error;
     } finally {
       client.release();
     }
   });
 
   fastify.patch('/transactions/:id/reject', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '5 minutes'
+      }
+    },
     schema: {
+      security: [{ BearerAuth: [] }],
       description: 'Rechaza una transaccion pendiente sin modificar saldos',
       params: {
         type: 'object',
+        required: ['id'],
         properties: {
-          id: { type: 'string', format: 'uuid' }
-        },
-        required: ['id']
+          id: {
+            type: 'string',
+            format: 'uuid'
+          }
+        }
       },
       response: {
         200: {
@@ -269,7 +320,7 @@ export default async function transactionRoutes(fastify, options) {
         }
       }
     }
-  }, async (request, reply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
       
@@ -280,15 +331,13 @@ export default async function transactionRoutes(fastify, options) {
       );
       
       if (transactionResult.rows.length === 0) {
-        reply.code(404);
-        return { error: 'Transaction not found' };
+        throw new NotFoundError('Transaction not found');
       }
       
       const transaction = transactionResult.rows[0];
       
       if (transaction.estado !== 'pendiente') {
-        reply.code(400);
-        return { error: 'Transaction is not pending' };
+        throw new BadRequestError('Transaction is not pending');
       }
       
       // Rechazamos la tx
@@ -311,22 +360,39 @@ export default async function transactionRoutes(fastify, options) {
       };
       
     } catch (error) {
-      reply.code(500);
-      return { error: 'Failed to reject transaction', details: error.message };
+      throw error;
     }
   });
 
   fastify.post('/transactions', {
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '5 minutes'
+      }
+    },
     schema: {
+      security: [{ BearerAuth: [] }],
       description: 'Crea una transaccion entre dos usuarios',
       body: {
         type: 'object',
+        required: ['origen', 'destino', 'monto'],
         properties: {
-          origen: { type: 'string', format: 'uuid' },
-          destino: { type: 'string', format: 'uuid' },
-          monto: { type: 'number', minimum: 0.01 }
-        },
-        required: ['origen', 'destino', 'monto']
+          origen: {
+            type: 'string',
+            format: 'uuid'
+          },
+          destino: {
+            type: 'string',
+            format: 'uuid'
+          },
+          monto: {
+            type: 'number',
+            minimum: 0.01,
+            maximum: 999999999.99,
+            multipleOf: 0.01
+          }
+        }
       },
       response: {
         201: {
@@ -346,22 +412,13 @@ export default async function transactionRoutes(fastify, options) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
-          }
-        },
-        500: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-            details: { type: 'string' }
-          }
-        }
+        400: { $ref: 'ErrorResponse' },
+        401: { $ref: 'ErrorResponse' },
+        429: { $ref: 'ErrorResponse' },
+        500: { $ref: 'ErrorResponse' }
       }
     }
-  }, async (request, reply) => {
+  }, async (request: FastifyRequest<{ Body: CreateTransactionRequest }>, reply: FastifyReply) => {
     const client = await fastify.pg.connect();
     
     try {
@@ -377,16 +434,14 @@ export default async function transactionRoutes(fastify, options) {
       
       if (usersResult.rows.length !== 2) {
         await client.query('ROLLBACK');
-        reply.code(400);
-        return { error: 'Origin or destination user not found' };
+        throw new BadRequestError('Origin or destination user not found');
       }
       
       // origen tiene suficiente plata?
-      const originUser = usersResult.rows.find(u => u.id === origen);
+      const originUser = usersResult.rows.find((u: User) => u.id === origen);
       if (originUser.saldo < monto) {
         await client.query('ROLLBACK');
-        reply.code(400);
-        return { error: 'Insufficient funds' };
+        throw new BadRequestError('Insufficient funds');
       }
       
       // determinamos el estado basado en el monto
@@ -410,7 +465,7 @@ export default async function transactionRoutes(fastify, options) {
       
       // Si es confirmada, actualizar saldos
       if (estado === 'confirmada') {
-        const destUser = usersResult.rows.find(u => u.id === destino);
+        const destUser = usersResult.rows.find((u: User) => u.id === destino);
         const destSaldo = parseFloat(destUser.saldo);
         
         await client.query(
@@ -454,8 +509,7 @@ export default async function transactionRoutes(fastify, options) {
       
     } catch (error) {
       await client.query('ROLLBACK');
-      reply.code(500);
-      return { error: 'Failed to create transaction', details: error.message };
+      throw error;
     } finally {
       client.release();
     }
