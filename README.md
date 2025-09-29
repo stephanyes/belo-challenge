@@ -48,8 +48,6 @@ API REST desarrollada con Fastify y PostgreSQL.
    npm run seed
    ```
 
-## Endpoints
-
 ## Estructura del proyecto
 
 ```text
@@ -96,6 +94,9 @@ belo/
 ├─ env.example               # Variables de entorno de ejemplo
 └─ README.md
 ```
+
+## Endpoints
+
 
 ### **Rutas Generales (Publicas)**
 - `GET /` - Endpoint principal
