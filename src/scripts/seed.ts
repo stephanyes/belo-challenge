@@ -50,10 +50,76 @@ const seedData = async () => {
       );
     }
     
+    // Insertar logs de ejemplo en audit_log
+    const auditLogs = [
+      {
+        user_id: userIds[0],
+        transaction_id: null,
+        operation_type: 'transaction_created',
+        amount: 100.00,
+        previous_balance: 100000.00,
+        new_balance: 100000.00,
+        description: 'Initial balance setup'
+      },
+      {
+        user_id: userIds[0],
+        transaction_id: null,
+        operation_type: 'debit',
+        amount: 100.00,
+        previous_balance: 100000.00,
+        new_balance: 99900.00,
+        description: 'Transaction confirmed - debit for transaction to María'
+      },
+      {
+        user_id: userIds[1],
+        transaction_id: null,
+        operation_type: 'credit',
+        amount: 100.00,
+        previous_balance: 500000.00,
+        new_balance: 500100.00,
+        description: 'Transaction confirmed - credit for transaction from Juan'
+      },
+      {
+        user_id: userIds[1],
+        transaction_id: null,
+        operation_type: 'transaction_created',
+        amount: 50.00,
+        previous_balance: 500100.00,
+        new_balance: 500100.00,
+        description: 'Transaction created - pending - to Carlos'
+      },
+      {
+        user_id: userIds[2],
+        transaction_id: null,
+        operation_type: 'credit',
+        amount: 200.00,
+        previous_balance: 60000.00,
+        new_balance: 60200.00,
+        description: 'Transaction confirmed - credit for transaction from Carlos'
+      },
+      {
+        user_id: userIds[3],
+        transaction_id: null,
+        operation_type: 'transaction_created',
+        amount: 1000.00,
+        previous_balance: 30000.00,
+        new_balance: 30000.00,
+        description: 'Transaction created - pending - to Pedro'
+      }
+    ];
+    
+    for (const log of auditLogs) {
+      await client.query(
+        'INSERT INTO audit_log (user_id, transaction_id, operation_type, amount, previous_balance, new_balance, description) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [log.user_id, log.transaction_id, log.operation_type, log.amount, log.previous_balance, log.new_balance, log.description]
+      );
+    }
+    
     await client.query('COMMIT');
     console.log('Seed data OK');
     console.log('6 Users added, 4 with balances 2 with zero balance');
     console.log('Transactions: 4 (2 confirmed, 2 pending)');
+    console.log('Audit logs: 6 sample entries');
     
   } catch (error) {
     await client.query('ROLLBACK');
